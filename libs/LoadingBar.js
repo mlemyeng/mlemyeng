@@ -2,7 +2,13 @@
 
 class LoadingBar {
 	constructor() {
-		// Container for the loading box
+		// Load Google Fonts (if needed)
+		const link = document.createElement('link');
+		link.href = 'https://fonts.googleapis.com/css2?family=Poppins:wght@600&display=swap';
+		link.rel = 'stylesheet';
+		document.head.appendChild(link);
+
+		// Main loading box
 		this.dom = document.createElement('div');
 		this.dom.style.position = 'absolute';
 		this.dom.style.top = '50%';
@@ -10,18 +16,19 @@ class LoadingBar {
 		this.dom.style.transform = 'translate(-50%, -50%)';
 		this.dom.style.width = '250px';
 		this.dom.style.height = '150px';
-		this.dom.style.backgroundColor = '#ffe6ee'; // soft pink
+		this.dom.style.backgroundColor = '#ffe6ee';
 		this.dom.style.border = '2px solid #ffb6c1';
 		this.dom.style.borderRadius = '20px';
 		this.dom.style.display = 'flex';
 		this.dom.style.alignItems = 'center';
 		this.dom.style.justifyContent = 'center';
 		this.dom.style.flexDirection = 'column';
-		this.dom.style.fontFamily = 'Arial, sans-serif';
+		this.dom.style.fontFamily = '"Poppins", Arial, sans-serif';
+		this.dom.style.fontWeight = '600';
 		this.dom.style.zIndex = '1000';
 		this.dom.style.boxShadow = '0 4px 10px rgba(0, 0, 0, 0.1)';
 
-		// Text element
+		// Text inside the box
 		this.text = document.createElement('div');
 		this.text.style.color = '#444';
 		this.text.style.fontSize = '18px';
@@ -32,7 +39,6 @@ class LoadingBar {
 		document.body.appendChild(this.dom);
 	}
 
-	// This property is still used by the loader even if the bar is gone
 	set progress(value) {
 		if (value >= 1) {
 			this.text.innerText = 'ready to start!';
