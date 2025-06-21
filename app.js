@@ -6,7 +6,7 @@ import { Stats } from './libs/stats.module.js';
 import { LoadingBar } from './libs/LoadingBar.js';
 import { VRButton } from './libs/VRButton.js';
 import { CanvasUI } from './libs/CanvasUI.js';
-import { GazeController } from './libs/GazeController.js';
+import { GazeController } from './libs/GazeController.js'
 import { XRControllerModelFactory } from './libs/three/jsm/XRControllerModelFactory.js';
 
 class App {
@@ -28,22 +28,7 @@ class App {
 		this.scene = new THREE.Scene();
 		this.scene.add(this.dolly);
 
-		this.listener = new THREE.AudioListener();
-		this.camera.add(this.listener);
-		this.sound = new THREE.Audio(this.listener);
-		const audioLoader = new THREE.AudioLoader();
-		audioLoader.load('./assets/bg-music.mp3', (buffer) => {
-			this.sound.setBuffer(buffer);
-			this.sound.setLoop(true);
-			this.sound.setVolume(0.5);
-		});
-		document.body.addEventListener('click', () => {
-			if (this.sound && this.sound.buffer && !this.sound.isPlaying) {
-				this.sound.play();
-			}
-		}, { once: true });
-
-		const ambient = new THREE.HemisphereLight(0xFFFFFF, 0xAAAAAA, 4.2);
+		const ambient = new THREE.HemisphereLight(0xFFFFFF, 0xAAAAAA, 0.8);
 		this.scene.add(ambient);
 
 		this.renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -51,16 +36,9 @@ class App {
 		this.renderer.setSize(window.innerWidth, window.innerHeight);
 		this.renderer.outputEncoding = THREE.sRGBEncoding;
 		container.appendChild(this.renderer.domElement);
-
 		this.setEnvironment();
 
-		window.addEventListener('resize', () => {
-			if (!this.renderer.xr.isPresenting) {
-				this.camera.aspect = window.innerWidth / window.innerHeight;
-				this.camera.updateProjectionMatrix();
-				this.renderer.setSize(window.innerWidth, window.innerHeight);
-			}
-		});
+		window.addEventListener('resize', this.resize.bind(this));
 
 		this.clock = new THREE.Clock();
 		this.up = new THREE.Vector3(0, 1, 0);
@@ -73,11 +51,13 @@ class App {
 		container.appendChild(this.stats.dom);
 
 		this.loadingBar = new LoadingBar();
+
 		this.loadCollege();
 
 		this.immersive = false;
 
 		const self = this;
+
 		fetch('./college.json')
 			.then(response => response.json())
 			.then(obj => {
@@ -87,7 +67,25 @@ class App {
 	}
 
 	setEnvironment() {
-		this.scene.background = new THREE.Color(0x87CEEB); // sky blue
+		const loader = new RGBELoader().setDataType(THREE.UnsignedByteType);
+		const pmremGenerator = new THREE.PMREMGenerator(this.renderer);
+		pmremGenerator.compileEquirectangularShader();
+
+		const self = this;
+
+		loader.load('./assets/hdr/venice_sunset_1k.hdr', (texture) => {
+			const envMap = pmremGenerator.fromEquirectangular(texture).texture;
+			pmremGenerator.dispose();
+			self.scene.environment = envMap;
+		}, undefined, (err) => {
+			console.error('An error occurred setting the environment');
+		});
+	}
+
+	resize() {
+		this.camera.aspect = window.innerWidth / window.innerHeight;
+		this.camera.updateProjectionMatrix();
+		this.renderer.setSize(window.innerWidth, window.innerHeight);
 	}
 
 	loadCollege() {
@@ -98,58 +96,54 @@ class App {
 
 		const self = this;
 
-		loader.load(
-			'college.glb',
-			function (gltf) {
-				const college = gltf.scene.children[0];
-				self.scene.add(college);
+		loader.load('college.glb', function (gltf) {
+			const college = gltf.scene.children[0];
+			self.scene.add(college);
 
-				// ✅ Load Maxwell model right after adding college
-				loader.load(
-					'Maxwell.glb',
-					function (gltf2) {
-						const maxwell = gltf2.scene;
-						maxwell.name = "Maxwell";
-						maxwell.position.set(2, 0, 9);
-						maxwell.scale.set(1.5, 1.5, 1.5);
-						self.scene.add(maxwell);
-						console.log("✅ Maxwell loaded", maxwell);
-					},
-					undefined,
-					function (error) {
-						console.error('❌ Error loading Maxwell model:', error);
+			// ✅ Load Maxwell model after college is added
+			loader.load('Maxwell.glb',
+				function (gltf2) {
+					const maxwell = gltf2.scene;
+					maxwell.name = "Maxwell";
+					maxwell.position.set(4, 0, 9);
+					maxwell.scale.set(2, 2, 2);
+					self.scene.add(maxwell);
+					console.log("✅ Maxwell loaded", maxwell);
+				},
+				undefined,
+				function (error) {
+					console.error('❌ Error loading Maxwell model:', error);
+				}
+			);
+
+			college.traverse(function (child) {
+				if (child.isMesh) {
+					if (child.name.indexOf("PROXY") != -1) {
+						child.material.visible = false;
+						self.proxy = child;
+					} else if (child.material.name.indexOf('Glass') != -1) {
+						child.material.opacity = 0.1;
+						child.material.transparent = true;
+					} else if (child.material.name.indexOf("SkyBox") != -1) {
+						const mat1 = child.material;
+						const mat2 = new THREE.MeshBasicMaterial({ map: mat1.map });
+						child.material = mat2;
+						mat1.dispose();
 					}
-				);
+				}
+			});
 
-				college.traverse(function (child) {
-					if (child.isMesh) {
-						if (child.name.indexOf("PROXY") !== -1) {
-							child.material.visible = false;
-							self.proxy = child;
-						} else if (child.material.name.indexOf('Glass') !== -1) {
-							child.material.opacity = 0.1;
-							child.material.transparent = true;
-						} else if (child.material.name.indexOf("SkyBox") !== -1) {
-							child.material.dispose();
-							child.material = new THREE.MeshBasicMaterial({
-								color: 0x87CEEB,
-								side: THREE.BackSide
-							});
-						}
-					}
-				});
+			const door1 = college.getObjectByName("LobbyShop_Door__1_");
+			const door2 = college.getObjectByName("LobbyShop_Door__2_");
+			const pos = door1.position.clone().sub(door2.position).multiplyScalar(0.5).add(door2.position);
+			const obj = new THREE.Object3D();
+			obj.name = "LobbyShop";
+			obj.position.copy(pos);
+			college.add(obj);
 
-				const door1 = college.getObjectByName("LobbyShop_Door__1_");
-				const door2 = college.getObjectByName("LobbyShop_Door__2_");
-				const pos = door1.position.clone().sub(door2.position).multiplyScalar(0.5).add(door2.position);
-				const obj = new THREE.Object3D();
-				obj.name = "LobbyShop";
-				obj.position.copy(pos);
-				college.add(obj);
-
-				self.loadingBar.visible = false;
-				self.setupXR();
-			},
+			self.loadingBar.visible = false;
+			self.setupXR();
+		},
 			function (xhr) {
 				self.loadingBar.progress = (xhr.loaded / xhr.total);
 			},
@@ -254,44 +248,35 @@ class App {
 		this.raycaster.set(pos, dir);
 
 		let blocked = false;
+
 		let intersect = this.raycaster.intersectObject(this.proxy);
-		if (intersect.length > 0) {
-			if (intersect[0].distance < wallLimit) blocked = true;
-		}
+		if (intersect.length > 0 && intersect[0].distance < wallLimit) blocked = true;
 
 		if (!blocked) {
 			this.dolly.translateZ(-dt * speed);
 			pos = this.dolly.getWorldPosition(this.origin);
 		}
 
-		// cast left
-		dir.set(-1, 0, 0);
-		dir.applyMatrix4(this.dolly.matrix);
-		dir.normalize();
+		// Left
+		dir.set(-1, 0, 0).applyMatrix4(this.dolly.matrix).normalize();
 		this.raycaster.set(pos, dir);
 		intersect = this.raycaster.intersectObject(this.proxy);
-		if (intersect.length > 0) {
-			if (intersect[0].distance < wallLimit) this.dolly.translateX(wallLimit - intersect[0].distance);
-		}
+		if (intersect.length > 0 && intersect[0].distance < wallLimit)
+			this.dolly.translateX(wallLimit - intersect[0].distance);
 
-		// cast right
-		dir.set(1, 0, 0);
-		dir.applyMatrix4(this.dolly.matrix);
-		dir.normalize();
+		// Right
+		dir.set(1, 0, 0).applyMatrix4(this.dolly.matrix).normalize();
 		this.raycaster.set(pos, dir);
 		intersect = this.raycaster.intersectObject(this.proxy);
-		if (intersect.length > 0) {
-			if (intersect[0].distance < wallLimit) this.dolly.translateX(intersect[0].distance - wallLimit);
-		}
+		if (intersect.length > 0 && intersect[0].distance < wallLimit)
+			this.dolly.translateX(intersect[0].distance - wallLimit);
 
-		// cast down
+		// Down
 		dir.set(0, -1, 0);
 		pos.y += 1.5;
 		this.raycaster.set(pos, dir);
 		intersect = this.raycaster.intersectObject(this.proxy);
-		if (intersect.length > 0) {
-			this.dolly.position.copy(intersect[0].point);
-		}
+		if (intersect.length > 0) this.dolly.position.copy(intersect[0].point);
 
 		this.dolly.quaternion.copy(quaternion);
 	}
