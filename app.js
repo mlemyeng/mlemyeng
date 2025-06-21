@@ -100,38 +100,31 @@ class App {
 			const college = gltf.scene.children[0];
 			self.scene.add(college);
 
-			// ✅ Load Maxwell model after college is added
-			loader.load('Maxwell.glb',
+			// Load Maxwell
+			loader.load(
+				'Maxwell.glb',
 				function (gltf2) {
 					const maxwell = gltf2.scene;
 					maxwell.name = "Maxwell";
-					maxwell.position.set(4, 0, 9);
 					maxwell.scale.set(2, 2, 2);
+
+					// 🧭 Position near the reception
+					const reception = self.scene.getObjectByName("LobbyShop");
+					if (reception) {
+						maxwell.position.copy(reception.position).add(new THREE.Vector3(2, 0, 0)); // offset from the door
+					} else {
+						console.warn("❗ Reception (LobbyShop) not found, placing Maxwell at default spot.");
+						maxwell.position.set(4, 0, 9);
+					}
+
 					self.scene.add(maxwell);
-					console.log("✅ Maxwell loaded", maxwell);
+					console.log("✅ Maxwell placed near reception", maxwell);
 				},
 				undefined,
 				function (error) {
 					console.error('❌ Error loading Maxwell model:', error);
 				}
 			);
-
-			college.traverse(function (child) {
-				if (child.isMesh) {
-					if (child.name.indexOf("PROXY") != -1) {
-						child.material.visible = false;
-						self.proxy = child;
-					} else if (child.material.name.indexOf('Glass') != -1) {
-						child.material.opacity = 0.1;
-						child.material.transparent = true;
-					} else if (child.material.name.indexOf("SkyBox") != -1) {
-						const mat1 = child.material;
-						const mat2 = new THREE.MeshBasicMaterial({ map: mat1.map });
-						child.material = mat2;
-						mat1.dispose();
-					}
-				}
-			});
 
 			const door1 = college.getObjectByName("LobbyShop_Door__1_");
 			const door2 = college.getObjectByName("LobbyShop_Door__2_");
